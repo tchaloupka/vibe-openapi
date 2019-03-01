@@ -2,6 +2,8 @@ module vibe.openapi.definitions;
 
 import vibe.data.serialization;
 
+@safe:
+
 /// This is the root document object of the OpenAPI document.
 struct Document
 {
