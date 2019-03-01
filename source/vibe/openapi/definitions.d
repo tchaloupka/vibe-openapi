@@ -453,7 +453,236 @@ struct ExternalDocumentation
 	//TODO: https://swagger.io/specification/#externalDocumentationObject
 }
 
+/++
+	The Schema Object allows the definition of input and output data types. These types can be
+	objects, but also primitives and arrays. This object is an extended subset of the JSON Schema
+	Specification Wright Draft 00.
+
+	For more information about the properties, see JSON Schema Core and JSON Schema Validation.
+	Unless stated otherwise, the property definitions follow the JSON Schema.
++/
 class Schema
 {
-	//TODO: https://swagger.io/specification/#schemaObject
+	@optional:
+
+	/// The reference string.
+	@name("$ref") string _ref;
+
+	/++ The following properties are taken directly from the JSON Schema definition and follow the same specifications: +/
+
+	/// A title will preferrably be short
+	string title;
+
+	/// A numeric instance is only valid if division by this keyword's value results in an integer.
+	ulong multipleOf;
+
+	/// An upper limit for a numeric instance. If the instance is a number, then this keyword
+	/// validates if "exclusiveMaximum" is true and instance is less than the provided value, or
+	/// else if the instance is less than or exactly equal to the provided value.
+	double maximum;
+
+	/// ditto
+	bool exclusiveMaximum;
+
+	/// A lower limit for a numeric instance. If the instance is a number, then this keyword
+	/// validates if "exclusiveMinimum" is true and instance is greater than the provided value, or
+	/// else if the instance is greater than or exactly equal to the provided value.
+	double minimum;
+
+	/// ditto
+	bool exclusiveMinimum;
+
+	/// A string instance is valid against this keyword if its length is less than, or equal to, the
+	/// value of this keyword.
+	ulong maxLength;
+
+	/// A string instance is valid against this keyword if its length is greater than, or equal to,
+	/// the value of this keyword.
+	ulong minLength;
+
+	/// This string SHOULD be a valid regular expression, according to the ECMA 262 regular
+	/// expression dialect.
+	string pattern;
+
+	/// An array instance is valid against "maxItems" if its size is less than, or equal to.
+	ulong maxItems;
+
+	/// An array instance is valid against "minItems" if its size is greater than, or equal to.
+	ulong minItems;
+
+	/// If this keyword has boolean value false, the instance validates successfully.  If it has
+	/// boolean value true, the instance validates successfully if all of its elements are unique.
+	bool uniqueItems;
+
+	/// An object instance is valid against "maxProperties" if its number of properties is less
+	/// than, or equal to, the value of this keyword.
+	ulong maxProperties;
+
+	/// An object instance is valid against "minProperties" if its number of properties is greater
+	/// than, or equal to, the value of this keyword.
+	ulong minProperties;
+
+	/// An object instance is valid against this keyword if its property set contains all elements
+	/// in this keyword's array value.
+	string[] required;
+
+	/// Possible values
+	string[] enum_;
+
+	/++ The following properties are taken from the JSON Schema definition but their definitions were adjusted to the OpenAPI Specification. +/
+
+	/// An instance validates successfully against this keyword if its value is equal to one of the
+	/// elements in this keyword's array value.
+	SchemaType type;
+
+	/// An instance validates successfully against this keyword if it validates successfully against
+	/// all schemas defined by this keyword's value.
+	Schema[] allOf;
+
+	/// An instance validates successfully against this keyword if it validates successfully against
+	/// exactly one schema defined by this keyword's value.
+	Schema[] oneOf;
+
+	/// An instance validates successfully against this keyword if it validates successfully against
+	/// at least one schema defined by this keyword's value.
+	Schema[] anyOf;
+
+	/// An instance is valid against this keyword if it fails to validate successfully against the
+	/// schema defined by this keyword.
+	Schema[] not;
+
+	/// MUST be present if the type is array. Successful validation of an array instance with
+	/// regards to these two keywords is determined as follows: If either keyword is absent, it may
+	/// be considered present with an empty schema.
+	Schema items;
+
+	/// Using properties, we can define a known set of properties, however if we wish to use any
+	/// other hash/map where we can't specify how many keys there are nor what they are in advance,
+	/// we should use additionalProperties.
+	Schema[string] properties;
+
+	/// It will match any property name (that will act as the dict's key, and the $ref or type will
+	/// be the schema of the dict's value, and since there should not be more than one properties
+	/// with the same name for every given object, we will get the enforcement of unique keys.
+	Schema additionalProperties;
+
+	/// CommonMark syntax MAY be used for rich text representation.
+	string description;
+
+	/// See: https://swagger.io/specification/#dataTypeFormat
+	SchemaFormat format;
+
+	/// The default value
+	string default_;
+
+	/+ Other than the JSON Schema subset fields, the following fields MAY be used for further schema documentation: +/
+
+	/// Allows sending a null value for the defined schema.
+	bool nullable;
+
+	/// Adds support for polymorphism. The discriminator is an object name that is used to
+	/// differentiate between other schemas which may satisfy the payload description. See
+	/// Composition and Inheritance for more details.
+	Discriminator discriminator;
+
+	/// Relevant only for Schema "properties" definitions. Declares the property as "read only".
+	/// This means that it MAY be sent as part of a response but SHOULD NOT be sent as part of the
+	/// request. If the property is marked as readOnly being true and is in the required list, the
+	/// required will take effect on the response only. A property MUST NOT be marked as both
+	/// readOnly and writeOnly being true. Default value is false.
+	bool readOnly;
+
+	/// Relevant only for Schema "properties" definitions. Declares the property as "write only".
+	/// Therefore, it MAY be sent as part of a request but SHOULD NOT be sent as part of the
+	/// response. If the property is marked as writeOnly being true and is in the required list, the
+	/// required will take effect on the request only. A property MUST NOT be marked as both
+	/// readOnly and writeOnly being true. Default value is false.
+	bool writeOnly;
+
+	/// This MAY be used only on properties schemas. It has no effect on root schemas. Adds
+	/// additional metadata to describe the XML representation of this property.
+	XML xml;
+
+	/// Additional external documentation for this schema.
+	ExternalDocumentation externalDocs;
+
+	/// A free-form property to include an example of an instance for this schema. To represent examples that cannot
+	/// be naturally represented in JSON or YAML, a string value can be used to contain the example with escaping where necessary.
+	string example;
+
+	/// Specifies that a schema is deprecated and SHOULD be transitioned out of usage. Default value is false.
+	bool deprecated_;
+}
+
+/// Value types
+enum SchemaType : string
+{
+	null_ = "null", ///
+	boolean = "boolean", ///
+	object = "object", ///
+	array = "array", ///
+	number = "number", ///
+	integer = "integer", ///
+	string = "string" ///
+}
+
+/// Value format specifier
+enum SchemaFormat : string
+{
+	undefined = "undefined", ///
+	string = "string", ///
+	int32 = "int32", /// signed 32 bits
+	int64 = "int64", /// signed 64 bits
+	float_ = "float", ///
+	byte_ = "byte", /// base64 encoded characters
+	binary = "binary", /// any sequence of octets
+	date = "date", /// As defined by full-date - RFC3339
+	dateTime = "date-time", /// As defined by date-time - RFC3339
+	password = "password", /// A hint to UIs to obscure input.
+	uri = "uri", ///
+	uriref = "uriref" ///
+}
+
+/// When request bodies or response payloads may be one of a number of different schemas, a
+/// discriminator object can be used to aid in serialization, deserialization, and validation. The
+/// discriminator is a specific object in a schema which is used to inform the consumer of the
+/// specification of an alternative schema based on the value associated with it.
+/// When using the discriminator, inline schemas will not be considered.
+struct Discriminator
+{
+	/// The name of the property in the payload that will hold the discriminator value.
+	string propertyName;
+
+	/// An object to hold mappings between payload values and schema names or references.
+	@optional string[string] mapping;
+}
+
+/// A metadata object that allows for more fine-tuned XML model definitions.
+/// When using arrays, XML element names are not inferred (for singular/plural forms) and the name
+/// property SHOULD be used to add that information. See examples for expected behavior.
+struct XML
+{
+	@optional:
+
+	/// Replaces the name of the element/attribute used for the described schema property. When
+	/// defined within items, it will affect the name of the individual XML elements within the
+	/// list. When defined alongside type being array (outside the items), it will affect the
+	/// wrapping element and only if wrapped is true. If wrapped is false, it will be ignored.
+	string name;
+
+	/// The URI of the namespace definition. Value MUST be in the form of an absolute URI.
+	string namespace;
+
+	/// The prefix to be used for the name.
+	string prefix;
+
+	/// Declares whether the property definition translates to an attribute instead of an element.
+	/// Default value is false.
+	bool attribute;
+
+	/// MAY be used only for an array definition. Signifies whether the array is wrapped (for
+	/// example, <books><book/><book/></books>) or unwrapped (<book/><book/>). Default value is
+	/// false. The definition takes effect only when defined alongside type being array (outside the
+	/// items).
+	bool wrapped;
 }
