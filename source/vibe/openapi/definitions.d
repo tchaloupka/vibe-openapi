@@ -1,6 +1,6 @@
 module vibe.openapi.definitions;
 
-import vibe.data.serialization;
+import vibe.openapi.data.serialization;
 
 @safe:
 
