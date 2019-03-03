@@ -408,28 +408,30 @@ private template serializeValueImpl(Serializer, alias Policy) {
 						auto vt = tuple!TM(__traits(getMember, value, mname));
 					}
 					enum opt = getPolicyAttribute!(TU, mname, OptionalAttribute, Policy)(OptionalAttribute!DefaultPolicy(OptionalDirection.req)).direction;
+					alias VT = typeof(vt);
 
 					//skip optional attributes from serialization
 					if (opt & OptionalDirection.out_) {
 						import vibe.openapi.data.json : Json;
-						static if (isInstanceOf!(Nullable, typeof(vt))) {
+						static if (isInstanceOf!(Nullable, VT)) {
 							if (vt.isNull) continue;
-						} else static if (is(Unqual!(typeof(vt)) == Json)) {
+						} else static if (is(Unqual!VT == Json)) {
 							if (vt.type == Json.Type.undefined || vt.type == Json.Type.null_ || (vt.type == Json.Type.object && !vt.length)) continue;
-						} else static if (is(typeof(vt) == class)) {
+						} else static if (is(VT == class)) {
 							if (vt is null) continue;
 						} else {
 							// workaround for unsafe opEquals
-							static if (!isSafeSerializer!Serializer || __traits(compiles, () @safe { return vt == typeof(vt).init; }())) {
-								if (vt == typeof(vt).init) continue;
+							static if (!isSafeSerializer!Serializer || __traits(compiles, () @safe { return vt == VT.init; }())) {
+								static if (isFloatingPoint!VT) { if (vt != vt) continue; }
+								else { if (vt == VT.init) continue; }
 							} else {
-								if (() @trusted { return vt == typeof(vt).init; }()) continue;
+								if (() @trusted { return vt == VT.init; }()) continue;
 							}
 						}
 					}
-					alias STraits = SubTraits!(Traits, typeof(vt), TA);
+					alias STraits = SubTraits!(Traits, VT, TA);
 					ser.beginWriteDictionaryEntry!STraits(name);
-					ser.serializeValue!(typeof(vt), TA)(vt);
+					ser.serializeValue!(VT, TA)(vt);
 					ser.endWriteDictionaryEntry!STraits(name);
 				}
 				static if (__traits(compiles, ser.endWriteDictionary!Traits(0))) {
@@ -1639,6 +1641,18 @@ unittest { // testing the various UDAs
 	assert(ds.ii == 0);
 	assert(ds.io == 2);
 	assert(ds.igout == 7);
+}
+
+unittest { // optional floats
+	static struct Floats {
+		@optional float a;
+		@optional float b;
+	}
+	auto f = Floats(1.2f);
+	enum Sm = Floats.mangleof;
+	enum Fm = float.mangleof;
+	enum f_ser = "D("~Sm~"){DE("~Fm~",a)(V(f)(1.2))DE("~Fm~",a)}D("~Sm~")";
+	assert(serialize!TestSerializer(f) == f_ser);
 }
 
 unittest { // custom serialization support
