@@ -1,10 +1,12 @@
 module vibe.openapi.rest;
 
+import std.experimental.logger;
 import std.stdio;
 import std.string;
 import std.traits;
+import vibe.http.common : HTTPMethod;
 import vibe.openapi.definitions;
-import vibe.web.internal.rest.common;
+import vibe.web.internal.rest.common : RestInterface, Route;
 import vibe.web.rest;
 
 @safe:
@@ -25,7 +27,7 @@ import vibe.web.rest;
 +/
 ref Document registerRestInterface(TImpl)(ref Document doc, RestInterfaceSettings settings = null)
 {
-	import std.algorithm : filter, map, all;
+	import std.algorithm : among, filter, map, all;
 	import std.array : array;
 	import std.range : front;
 	import vibe.web.internal.rest.common : ParameterKind;
@@ -42,13 +44,9 @@ ref Document registerRestInterface(TImpl)(ref Document doc, RestInterfaceSetting
 		alias R = ReturnType!ovrld;
 
 		static if (isInstanceOf!(Collection, R))
-		{
 			doc.registerRestInterface!(R.Interface)(intf.subInterfaces[i].settings);
-		}
 		else
-		{
 			doc.registerRestInterface!R(intf.subInterfaces[i].settings);
-		}
 	}
 
 	// handle REST API functions
@@ -56,11 +54,43 @@ ref Document registerRestInterface(TImpl)(ref Document doc, RestInterfaceSetting
 	{
 		auto route = intf.routes[i];
 		auto diagparams = route.parameters.filter!(p => p.kind != ParameterKind.internal).map!(p => p.fieldName).array;
-		writefln("REST route: %s %s %s", route.method, route.pattern, diagparams);
-		//router.match(route.method, route.fullPattern, handler);
+
+		string pathPattern = route.pattern;
+		//TODO: convert to openapi format
+
+		infof("REST route: %s %s %s", route.method, pathPattern, diagparams);
+
+		auto ppath = pathPattern in doc.paths;
+		if (ppath is null)
+		{
+			doc.paths[pathPattern] = Path();
+			ppath = pathPattern in doc.paths;
+		}
+
+		with (HTTPMethod)
+		if (!route.method.among(GET, PUT, POST, DELETE, OPTIONS, HEAD, PATCH, TRACE))
+		{
+			warningf("'%s' isn't supported in OpenApi specification, function '%' won't be described", route.method, route.functionName);
+			continue;
+		}
+
+		if ((*ppath)[route.method] != Operation.init)
+		{
+			warningf("'%s %s' already set, function '%' won't be described", route.method, pathPattern, route.functionName);
+			continue;
+		}
+
+		(*ppath)[route.method] = route.describeOperation();
 	}
 
 	return doc;
+}
+
+private Operation describeOperation(in Route route)
+{
+	Operation op;
+	op.operationId = route.functionName;
+	return op;
 }
 
 @("Test simple API")
@@ -78,5 +108,9 @@ unittest
 	assert(doc.servers.length == 1);
 	assert(doc.servers[0].url == "http://localhost/api");
 
-	writeln(doc.serializeToJsonString);
+	Parameter param;
+	param.schema._ref = "fooref";
+	doc.paths["/"].get.parameters ~= param;
+
+	info(doc.serializeToJsonString);
 }

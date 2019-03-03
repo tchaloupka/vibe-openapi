@@ -7,6 +7,8 @@ import vibe.openapi.data.serialization;
 /// This is the root document object of the OpenAPI document.
 struct Document
 {
+	@disable this(this) {}
+
 	/// This string MUST be the semantic version number of the OpenAPI Specification version that
 	/// the OpenAPI document uses. The openapi field SHOULD be used by tooling specifications and
 	/// clients to interpret the OpenAPI document. This is not related to the API info.version
@@ -113,6 +115,8 @@ struct ServerVariable
 /// which operations and parameters are available.
 struct Path
 {
+	import vibe.http.common : HTTPMethod;
+
 	@optional:
 
 	/// Allows for an external definition of this path item. The referenced structure MUST be in the
@@ -161,6 +165,35 @@ struct Path
 	/// defined at the OpenApi Object's components/parameters.
 	//TOOD: ParameterObject | ReferenceObject - https://swagger.io/specification/#pathItemObject
 	Parameter[] parameters;
+
+	/++
+		Allows direct access to the Path operations using the HTTPMethod as index.
+		Only GET, PUT, POST, DELETE, OPTIONS, HEAD, PATCH, TRACE are valid to be used.
+	+/
+	ref Operation opIndex(HTTPMethod method)
+	{
+		debug {
+			import std.algorithm : among;
+			import std.format : format;
+			with(HTTPMethod) assert(
+				method.among(GET, PUT, POST, DELETE, OPTIONS, HEAD, PATCH, TRACE),
+				format!"Method %s isn't supported in OpenApi"(method)
+			);
+		}
+
+		with (HTTPMethod) switch (method)
+		{
+			case GET: return this.get;
+			case PUT: return this.put;
+			case POST: return this.post;
+			case DELETE: return this.delete_;
+			case OPTIONS: return this.options;
+			case HEAD: return this.head;
+			case PATCH: return this.patch;
+			case TRACE: return this.trace;
+			default: assert(0, "Should be handled already");
+		}
+	}
 }
 
 /// Describes a single API operation on a path.
