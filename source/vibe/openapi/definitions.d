@@ -649,6 +649,13 @@ class Schema
 	bool deprecated_;
 }
 
+/// Trusted `opEquals` wrapper used as a workaround.
+/// See: https://forum.dlang.org/post/bbuuyditavnbketggkjf@forum.dlang.org
+bool areEqual(T)(auto ref const T lhs, auto ref const T rhs) @trusted
+{
+	return lhs == rhs;
+}
+
 /// Value types
 enum SchemaType : string
 {

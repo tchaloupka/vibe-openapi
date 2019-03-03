@@ -74,7 +74,7 @@ ref Document registerRestInterface(TImpl)(ref Document doc, RestInterfaceSetting
 			continue;
 		}
 
-		if ((*ppath)[route.method] != Operation.init)
+		if (!areEqual((*ppath)[route.method], Operation.init))
 		{
 			warningf("'%s %s' already set, function '%' won't be described", route.method, pathPattern, route.functionName);
 			continue;
@@ -109,6 +109,7 @@ unittest
 	assert(doc.servers[0].url == "http://localhost/api");
 
 	Parameter param;
+	param.schema = new Schema();
 	param.schema._ref = "fooref";
 	doc.paths["/"].get.parameters ~= param;
 

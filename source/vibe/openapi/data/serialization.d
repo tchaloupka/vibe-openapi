@@ -1992,3 +1992,51 @@ unittest { // issue #2110 - single-element tuples
 	f.baz = new Bar();
 	assert(serializeToJsonString(f) == `{"baz":{}}`);
 }
+
+/**
+	Determins if a member is a public, non-static data field.
+*/
+template isRWPlainField(T, string M)
+{
+	static if (!isRWField!(T, M)) enum isRWPlainField = false;
+	else {
+		//pragma(msg, T.stringof~"."~M~":"~typeof(__traits(getMember, T, M)).stringof);
+		enum isRWPlainField = __traits(compiles, *(&__traits(getMember, Tgen!T(), M)) = *(&__traits(getMember, Tgen!T(), M)));
+	}
+}
+
+/**
+	Determines if a member is a public, non-static, de-facto data field.
+	In addition to plain data fields, R/W properties are also accepted.
+*/
+template isRWField(T, string M)
+{
+	import std.traits;
+	import std.typetuple;
+
+	static void testAssign()() {
+		static if (!isCopyable!T) T t; // for structs with disabled copy constructor
+		else T t = *(cast(T*)0);
+		__traits(getMember, t, M) = __traits(getMember, t, M);
+	}
+
+	// reject type aliases
+	static if (is(TypeTuple!(__traits(getMember, T, M)))) enum isRWField = false;
+	// reject non-public members
+	else static if (!isPublicMember!(T, M)) enum isRWField = false;
+	// reject static members
+	else static if (!isNonStaticMember!(T, M)) enum isRWField = false;
+	// reject non-typed members
+	else static if (!is(typeof(__traits(getMember, T, M)))) enum isRWField = false;
+	// reject void typed members (includes templates)
+	else static if (is(typeof(__traits(getMember, T, M)) == void)) enum isRWField = false;
+	// reject non-assignable members
+	else static if (!__traits(compiles, testAssign!()())) enum isRWField = false;
+	else static if (anySatisfy!(isSomeFunction, __traits(getMember, T, M))) {
+		// If M is a function, reject if not @property or returns by ref
+		private enum FA = functionAttributes!(__traits(getMember, T, M));
+		enum isRWField = (FA & FunctionAttribute.property) != 0;
+	} else {
+		enum isRWField = true;
+	}
+}
