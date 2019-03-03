@@ -10,6 +10,7 @@ Main focus ATM is generation of the OpenApi documentation from the REST API inte
 
 * [Original discussion](https://github.com/vibe-d/vibe.d/issues/1070)
 * [Another](https://github.com/gedaiu/OpenApi) library with similar purpose (but not for the use case this library is primarily targeted)
+* [Nice tutorial](https://idratherbewriting.com/learnapidoc/restapispecifications.html)
 
 ## Instalation
 

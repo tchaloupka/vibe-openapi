@@ -2,7 +2,7 @@ name "vibe-openapi"
 description "OpenApi support library for vibe-d"
 authors "Tomáš Chaloupka"
 copyright "Copyright © 2019, Tomáš Chaloupka"
-license "BSL-2.0"
+license "BSL-1.0"
 
 dependency "vibe-d" version="~>0.8.5-beta.2"
 
