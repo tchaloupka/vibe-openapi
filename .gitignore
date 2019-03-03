@@ -5,7 +5,7 @@ docs/
 vibe-openapi.so
 vibe-openapi.dylib
 vibe-openapi.dll
-vibe-openapi.a
+*vibe-openapi.a
 vibe-openapi.lib
 vibe-openapi-test-*
 vibe-openapi

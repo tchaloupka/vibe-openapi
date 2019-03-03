@@ -3,6 +3,7 @@
 
 		* https://github.com/vibe-d/vibe.d/pull/2274
 		* https://github.com/vibe-d/vibe.d/pull/1650
+		* https://github.com/vibe-d/vibe.d/pull/2275
 
 	When these'll be fixed/merged, this package would be removed as obsolete and not needed.
 +/

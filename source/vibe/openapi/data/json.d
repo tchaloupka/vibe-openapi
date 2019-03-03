@@ -278,6 +278,18 @@ struct Json {
 	*/
 	ref inout(Json) opIndex(size_t idx) inout { checkType!(Json[])(); return m_array[idx]; }
 
+	///
+	unittest {
+		Json value = Json.emptyArray;
+		value ~= 1;
+		value ~= true;
+		value ~= "foo";
+		assert(value[0] == 1);
+		assert(value[1] == true);
+		assert(value[2] == "foo");
+	}
+
+
 	/**
 		Allows direct indexing of object typed JSON values using a string as
 		the key.
@@ -312,6 +324,18 @@ struct Json {
 		nv.m_string = key;
 		version (VibeJsonFieldNames) nv.m_name = format("%s.%s", m_name, key);
 		return *nv;
+	}
+
+	///
+	unittest {
+		Json value = Json.emptyObject;
+		value["a"] = 1;
+		value["b"] = true;
+		value["c"] = "foo";
+		assert(value["a"] == 1);
+		assert(value["b"] == true);
+		assert(value["c"] == "foo");
+		assert(value["not-existing"].type() == Type.undefined);
 	}
 
 	/**
@@ -884,6 +908,19 @@ struct Json {
 		return pv;
 	}
 
+	///
+	unittest {
+		auto j = Json.emptyObject;
+		j["a"] = "foo";
+		j["b"] = Json.undefined;
+
+		assert("a" in j);
+		assert(("a" in j).get!string == "foo");
+		assert("b" !in j);
+		assert("c" !in j);
+	}
+
+
 	/**
 	 * The append operator will append arrays. This method always appends it's argument as an array element, so nested arrays can be created.
 	 */
@@ -1109,6 +1146,12 @@ struct Json {
 	}*/
 }
 
+@safe unittest { // issue #1234 - @safe toString
+	auto j = Json(true);
+	j.toString((str) @safe {}, FormatSpec!char("s"));
+	assert(j.toString() == "true");
+}
+
 
 /******************************************************************************/
 /* public functions                                                           */
@@ -1236,6 +1279,53 @@ Json parseJsonString(string str, string filename = null)
 	return ret;
 }
 
+@safe unittest {
+	// These currently don't work at compile time
+	assert(parseJsonString("17559991181826658461") == Json(BigInt(17559991181826658461UL)));
+	assert(parseJsonString("99999999999999999999999999") == () @trusted { return Json(BigInt("99999999999999999999999999")); } ());
+	auto json = parseJsonString(`{"hey": "This is @à test éhééhhéhéé !%/??*&?\ud83d\udcec"}`);
+	assert(json.toPrettyString() == parseJsonString(json.toPrettyString()).toPrettyString());
+
+	bool test() {
+		assert(parseJsonString("null") == Json(null));
+		assert(parseJsonString("true") == Json(true));
+		assert(parseJsonString("false") == Json(false));
+		assert(parseJsonString("1") == Json(1));
+		assert(parseJsonString("2.0") == Json(2.0));
+		assert(parseJsonString("\"test\"") == Json("test"));
+		assert(parseJsonString("[1, 2, 3]") == Json([Json(1), Json(2), Json(3)]));
+		assert(parseJsonString("{\"a\": 1}") == Json(["a": Json(1)]));
+		assert(parseJsonString(`"\\\/\b\f\n\r\t\u1234"`).get!string == "\\/\b\f\n\r\t\u1234");
+
+		return true;
+	}
+
+	// Run at compile time and runtime
+	assert(test());
+	static assert(test());
+}
+
+@safe unittest {
+	bool test() {
+		try parseJsonString(" \t\n ");
+		catch (Exception e) assert(e.msg.endsWith("JSON string contains only whitespaces."));
+		try parseJsonString(`{"a": 1`);
+		catch (Exception e) assert(e.msg.endsWith("Missing '}' before EOF."));
+		try parseJsonString(`{"a": 1 x`);
+		catch (Exception e) assert(e.msg.endsWith("Expected '}' or ',' - got 'x'."));
+		try parseJsonString(`[1`);
+		catch (Exception e) assert(e.msg.endsWith("Missing ']' before EOF."));
+		try parseJsonString(`[1 x`);
+		catch (Exception e) assert(e.msg.endsWith("Expected ']' or ',' - got 'x'."));
+
+		return true;
+	}
+
+	// Run at compile time and runtime
+	assert(test());
+	static assert(test());
+}
+
 /**
 	Serializes the given value to JSON.
 
@@ -1277,41 +1367,82 @@ Json parseJsonString(string str, string filename = null)
 
 	See_Also: `deserializeJson`, `vibe.data.serialization`
 */
-Json serializeToJson(T)(T value)
+Json serializeToJson(T)(auto ref in T value)
 {
 	return serialize!JsonSerializer(value);
 }
 /// ditto
-void serializeToJson(R, T)(R destination, T value)
+void serializeToJson(R, T)(R destination, auto ref in T value)
 	if (isOutputRange!(R, char) || isOutputRange!(R, ubyte))
 {
 	serialize!(JsonStringSerializer!R)(value, destination);
 }
 /// ditto
-string serializeToJsonString(T)(T value)
+string serializeToJsonString(T)(auto ref in T value)
 {
 	auto ret = appender!string;
 	serializeToJson(ret, value);
 	return ret.data;
 }
 
+///
+@safe unittest {
+	struct Foo {
+		int number;
+		string str;
+	}
+
+	Foo f;
+
+	f.number = 12;
+	f.str = "hello";
+
+	string json = serializeToJsonString(f);
+	assert(json == `{"number":12,"str":"hello"}`);
+	Json jsonval = serializeToJson(f);
+	assert(jsonval.type == Json.Type.object);
+	assert(jsonval["number"] == Json(12));
+	assert(jsonval["str"] == Json("hello"));
+}
+
+
 /**
 	Serializes the given value to a pretty printed JSON string.
 
 	See_also: `serializeToJson`, `vibe.data.serialization`
 */
-void serializeToPrettyJson(R, T)(R destination, T value)
+void serializeToPrettyJson(R, T)(R destination, auto ref in T value)
 	if (isOutputRange!(R, char) || isOutputRange!(R, ubyte))
 {
 	serialize!(JsonStringSerializer!(R, true))(value, destination);
 }
 /// ditto
-string serializeToPrettyJson(T)(T value)
+string serializeToPrettyJson(T)(auto ref in T value)
 {
 	auto ret = appender!string;
 	serializeToPrettyJson(ret, value);
 	return ret.data;
 }
+
+///
+@safe unittest {
+	struct Foo {
+		int number;
+		string str;
+	}
+
+	Foo f;
+	f.number = 12;
+	f.str = "hello";
+
+	string json = serializeToPrettyJson(f);
+	assert(json ==
+`{
+	"number": 12,
+	"str": "hello"
+}`);
+}
+
 
 /**
 	Deserializes a JSON value into the destination variable.
@@ -1334,6 +1465,219 @@ T deserializeJson(T, R)(R input)
 	if (!is(R == Json) && isInputRange!R)
 {
 	return deserialize!(JsonStringSerializer!R, T)(input);
+}
+
+///
+@safe unittest {
+	struct Foo {
+		int number;
+		string str;
+	}
+	Foo f = deserializeJson!Foo(`{"number": 12, "str": "hello"}`);
+	assert(f.number == 12);
+	assert(f.str == "hello");
+}
+
+@safe unittest {
+	import std.stdio;
+	enum Foo : string { k = "test" }
+	enum Boo : int { l = 5 }
+	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; Foo k; Boo l; }
+	immutable S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3], Foo.k, Boo.l};
+	S u;
+	deserializeJson(u, serializeToJson(t));
+	assert(t.a == u.a);
+	assert(t.b == u.b);
+	assert(t.c == u.c);
+	assert(t.d == u.d);
+	assert(t.e == u.e);
+	assert(t.f == u.f);
+	assert(t.g == u.g);
+	assert(t.h == u.h);
+	assert(t.i == u.i);
+	assert(t.j == u.j);
+	assert(t.k == u.k);
+	assert(t.l == u.l);
+}
+
+@safe unittest
+{
+	assert(uint.max == serializeToJson(uint.max).deserializeJson!uint);
+	assert(ulong.max == serializeToJson(ulong.max).deserializeJson!ulong);
+}
+
+unittest {
+	static struct A { int value; static A fromJson(Json val) @safe { return A(val.get!int); } Json toJson() const @safe { return Json(value); } }
+	static struct C { int value; static C fromString(string val) @safe { return C(val.to!int); } string toString() const @safe { return value.to!string; } }
+	static struct D { int value; }
+
+	assert(serializeToJson(const A(123)) == Json(123));
+	assert(serializeToJson(A(123))       == Json(123));
+	assert(serializeToJson(const C(123)) == Json("123"));
+	assert(serializeToJson(C(123))       == Json("123"));
+	assert(serializeToJson(const D(123)) == serializeToJson(["value": 123]));
+	assert(serializeToJson(D(123))       == serializeToJson(["value": 123]));
+}
+
+unittest {
+	auto d = Date(2001,1,1);
+	deserializeJson(d, serializeToJson(Date.init));
+	assert(d == Date.init);
+	deserializeJson(d, serializeToJson(Date(2001,1,1)));
+	assert(d == Date(2001,1,1));
+	struct S { immutable(int)[] x; }
+	S s;
+	deserializeJson(s, serializeToJson(S([1,2,3])));
+	assert(s == S([1,2,3]));
+	struct T {
+		@optional S s;
+		@optional int i;
+		@optional float f_; // underscore strip feature
+		@optional double d;
+		@optional string str;
+	}
+	auto t = T(S([1,2,3]));
+	deserializeJson(t, parseJsonString(`{ "s" : null, "i" : null, "f" : null, "d" : null, "str" : null }`));
+	assert(text(t) == text(T()));
+}
+
+unittest {
+	static class C {
+		@safe:
+		int a;
+		private int _b;
+		@property int b() const { return _b; }
+		@property void b(int v) { _b = v; }
+
+		@property int test() const { return 10; }
+
+		void test2() {}
+	}
+	C c = new C;
+	c.a = 1;
+	c.b = 2;
+
+	C d;
+	deserializeJson(d, serializeToJson(c));
+	assert(c.a == d.a);
+	assert(c.b == d.b);
+}
+
+unittest {
+	static struct C { @safe: int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
+	enum Color { Red, Green, Blue }
+	{
+		static class T {
+			@safe:
+			string[Color] enumIndexedMap;
+			string[C] stringableIndexedMap;
+			this() {
+				enumIndexedMap = [ Color.Red : "magenta", Color.Blue : "deep blue" ];
+								stringableIndexedMap = [ C(42) : "forty-two" ];
+			}
+		}
+
+		T original = new T;
+		original.enumIndexedMap[Color.Green] = "olive";
+		T other;
+		deserializeJson(other, serializeToJson(original));
+		assert(serializeToJson(other) == serializeToJson(original));
+	}
+	{
+		static struct S {
+			string[Color] enumIndexedMap;
+			string[C] stringableIndexedMap;
+		}
+
+		S *original = new S;
+		original.enumIndexedMap = [ Color.Red : "magenta", Color.Blue : "deep blue" ];
+		original.enumIndexedMap[Color.Green] = "olive";
+				original.stringableIndexedMap = [ C(42) : "forty-two" ];
+		S other;
+		deserializeJson(other, serializeToJson(original));
+		assert(serializeToJson(other) == serializeToJson(original));
+	}
+}
+
+unittest {
+	import std.typecons : Nullable;
+
+	struct S { Nullable!int a, b; }
+	S s;
+	s.a = 2;
+
+	auto j = serializeToJson(s);
+	assert(j["a"].type == Json.Type.int_);
+	assert(j["b"].type == Json.Type.null_);
+
+	auto t = deserializeJson!S(j);
+	assert(!t.a.isNull() && t.a == 2);
+	assert(t.b.isNull());
+}
+
+unittest { // #840
+	int[2][2] nestedArray = 1;
+	assert(nestedArray.serializeToJson.deserializeJson!(typeof(nestedArray)) == nestedArray);
+}
+
+unittest { // #1109
+	static class C {
+		@safe:
+		int mem;
+		this(int m) { mem = m; }
+		static C fromJson(Json j) { return new C(j.get!int-1); }
+		Json toJson() const { return Json(mem+1); }
+	}
+	const c = new C(13);
+	assert(serializeToJson(c) == Json(14));
+	assert(deserializeJson!C(Json(14)).mem == 13);
+}
+
+unittest { // const and mutable json
+	Json j = Json(1);
+	const k = Json(2);
+	assert(serializeToJson(j) == Json(1));
+	assert(serializeToJson(k) == Json(2));
+}
+
+unittest { // issue #1660 - deserialize AA whose key type is string-based enum
+	enum Foo: string
+	{
+		Bar = "bar",
+		Buzz = "buzz"
+	}
+
+	struct S {
+		int[Foo] f;
+	}
+
+	const s = S([Foo.Bar: 2000]);
+	assert(serializeToJson(s)["f"] == Json([Foo.Bar: Json(2000)]));
+
+	auto j = Json.emptyObject;
+	j["f"] = [Foo.Bar: Json(2000)];
+	assert(deserializeJson!S(j).f == [Foo.Bar: 2000]);
+}
+
+unittest {
+	struct V {
+		UUID v;
+	}
+
+	const u = UUID("318d7a61-e41b-494e-90d3-0a99f5531bfe");
+	const s = `{"v":"318d7a61-e41b-494e-90d3-0a99f5531bfe"}`;
+	auto j = Json(["v": Json(u)]);
+
+	const v = V(u);
+
+	assert(serializeToJson(v) == j);
+
+	j = Json.emptyObject;
+	j["v"] = u;
+	assert(deserializeJson!V(j).v == u);
+
+	assert(serializeToJsonString(v) == s);
+	assert(deserializeJson!V(s).v == u);
 }
 
 /**
@@ -1369,7 +1713,7 @@ struct JsonSerializer {
 	void beginWriteArrayEntry(Traits)(size_t) {}
 	void endWriteArrayEntry(Traits)(size_t) { m_compositeStack[$-1].appendArrayElement(m_current); }
 
-	void writeValue(Traits, T)(in T value)
+	void writeValue(Traits, T)(auto ref in T value)
 		if (!is(T == Json))
 	{
 		static if (is(T == JSONValue)) {
@@ -1455,6 +1799,16 @@ struct JsonSerializer {
 	}
 
 	bool tryReadNull(Traits)() { return m_current.type == Json.Type.null_; }
+}
+
+unittest {
+	struct T {
+		@optional string a;
+	}
+
+	auto obj = Json.emptyObject;
+	obj["a"] = Json.undefined;
+	assert(obj.deserializeJson!T.a == "");
 }
 
 /**
@@ -1692,6 +2046,27 @@ struct JsonStringSerializer(R, bool pretty = false)
 	}
 }
 
+/// Cloning JSON arrays
+unittest
+{
+	Json value = Json([ Json([ Json.emptyArray ]), Json.emptyArray ]).clone;
+
+	assert(value.length == 2);
+	assert(value[0].length == 1);
+	assert(value[0][0].length == 0);
+}
+
+unittest
+{
+	assert(serializeToJsonString(double.nan) == "null");
+	assert(serializeToJsonString(Json()) == "null");
+	assert(serializeToJsonString(Json(["bar":Json("baz"),"foo":Json()])) == `{"bar":"baz"}`);
+
+	struct Foo{Json bar = Json();}
+	Foo f;
+	assert(serializeToJsonString(f) == `{"bar":null}`);
+}
+
 /**
 	Writes the given JSON object as a JSON string into the destination range.
 
@@ -1774,6 +2149,74 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 	}
 }
 
+unittest {
+	auto a = Json.emptyObject;
+	a["a"] = Json.emptyArray;
+	a["b"] = Json.emptyArray;
+	a["b"] ~= Json(1);
+	a["b"] ~= Json.emptyObject;
+
+	assert(a.toString() == `{"a":[],"b":[1,{}]}` || a.toString() == `{"b":[1,{}],"a":[]}`);
+	assert(a.toPrettyString() ==
+`{
+	"a": [],
+	"b": [
+		1,
+		{}
+	]
+}`
+		|| a.toPrettyString() == `{
+	"b": [
+		1,
+		{}
+	],
+	"a": []
+}`);
+}
+
+unittest { // #735
+	auto a = Json.emptyArray;
+	a ~= "a";
+	a ~= Json();
+	a ~= "b";
+	a ~= null;
+	a ~= "c";
+	assert(a.toString() == `["a",null,"b",null,"c"]`);
+}
+
+unittest {
+	auto a = Json.emptyArray;
+	a ~= Json(1);
+	a ~= Json(2);
+	a ~= Json(3);
+	a ~= Json(4);
+	a ~= Json(5);
+
+	auto b = Json(a[0..a.length]);
+	assert(a == b);
+
+	auto c = Json(a[0..$]);
+	assert(a == c);
+	assert(b == c);
+
+	auto d = [Json(1),Json(2),Json(3)];
+	assert(d == a[0..a.length-2]);
+	assert(d == a[0..$-2]);
+}
+
+unittest {
+	auto j = Json(double.init);
+
+	assert(j.toString == "null"); // A double nan should serialize to null
+	j = 17.04f;
+	assert(j.toString == "17.04");	// A proper double should serialize correctly
+
+	double d;
+	deserializeJson(d, Json.undefined); // Json.undefined should deserialize to nan
+	assert(d != d);
+	deserializeJson(d, Json(null)); // Json.undefined should deserialize to nan
+	assert(d != d);
+}
 /**
 	Writes the given JSON object as a prettified JSON string into the destination range.
 
@@ -2016,6 +2459,25 @@ private auto skipNumber(R)(ref R s, out bool is_float, out bool is_long_overflow
 	return sOrig.takeExactly(idx);
 }
 
+unittest
+{
+	import std.meta : AliasSeq;
+	// test for string and for a simple range
+	foreach (foo; AliasSeq!(to!string, map!"a")) {
+		auto test_1 = foo("9223372036854775806"); // lower then long.max
+		auto test_2 = foo("9223372036854775807"); // long.max
+		auto test_3 = foo("9223372036854775808"); // greater then long.max
+		bool is_float;
+		bool is_long_overflow;
+		test_1.skipNumber(is_float, is_long_overflow);
+		assert(!is_long_overflow);
+		test_2.skipNumber(is_float, is_long_overflow);
+		assert(!is_long_overflow);
+		test_3.skipNumber(is_float, is_long_overflow);
+		assert(is_long_overflow);
+	}
+}
+
 /// private
 private string skipJsonString(R)(ref R s, int* line = null)
 {
@@ -2086,4 +2548,93 @@ private auto trustedRange(R)(R range)
 		void popFront() @trusted { range.popFront(); }
 	}
 	return Rng(range);
+}
+
+// make sure Json is usable for CTFE
+@safe unittest {
+	static assert(is(typeof({
+		struct Test {
+			Json object_ = Json.emptyObject;
+			Json array   = Json.emptyArray;
+		}
+	})), "CTFE for Json type failed.");
+
+	static Json test() {
+		Json j;
+		j = Json(42);
+		j = Json([Json(true)]);
+		j = Json(["foo": Json(null)]);
+		j = Json("foo");
+		return j;
+	}
+	enum j = test();
+	static assert(j == Json("foo"));
+}
+
+@safe unittest { // XSS prevention
+	assert(Json("</script>some/path").toString() == `"<\/script>some/path"`);
+	assert(serializeToJsonString("</script>some/path") == `"<\/script>some/path"`);
+}
+
+@system unittest { // Recursive structures
+	static struct Bar { Bar[] foos; int i; }
+	auto b = deserializeJson!Bar(`{"i":1,"foos":[{"foos":[],"i":2}]}`);
+	assert(b.i == 1);
+	assert(b.foos.length == 1);
+	assert(b.foos[0].i == 2);
+	assert(b.foos[0].foos.length == 0);
+}
+
+@safe unittest { // Json <-> std.json.JSONValue
+	auto astr = `{
+		"null": null,
+		"string": "Hello",
+		"integer": 123456,
+		"uinteger": 18446744073709551614,
+		"float": 12.34,
+		"object": { "hello": "world" },
+		"array": [1, 2, "string"],
+		"true": true,
+		"false": false
+	}`;
+	auto a = parseJsonString(astr);
+
+	// test JSONValue -> Json conversion
+	assert(Json(cast(JSONValue)a) == a);
+
+	// test Json -> JSONValue conversion
+	auto v = cast(JSONValue)a;
+	assert(deserializeJson!JSONValue(serializeToJson(v)) == v);
+
+	// test JSON strint <-> JSONValue serialization
+	assert(deserializeJson!JSONValue(astr) == v);
+	assert(parseJsonString(serializeToJsonString(v)) == a);
+
+	// test using std.conv for the conversion
+	import std.conv : to;
+	assert(a.to!JSONValue.to!Json == a);
+	assert(to!Json(to!JSONValue(a)) == a);
+}
+
+@safe unittest { // issue #2150 - serialization of const/mutable strings + wide character strings
+	assert(serializeToJson(cast(const(char)[])"foo") == Json("foo"));
+	assert(serializeToJson("foo".dup) == Json("foo"));
+	assert(deserializeJson!string(Json("foo")) == "foo");
+	assert(deserializeJson!string(Json([Json("f"), Json("o"), Json("o")])) == "foo");
+	assert(serializeToJsonString(cast(const(char)[])"foo") == "\"foo\"");
+	assert(deserializeJson!string("\"foo\"") == "foo");
+
+	assert(serializeToJson(cast(const(wchar)[])"foo"w) == Json("foo"));
+	assert(serializeToJson("foo"w.dup) == Json("foo"));
+	assert(deserializeJson!wstring(Json("foo")) == "foo");
+	assert(deserializeJson!wstring(Json([Json("f"), Json("o"), Json("o")])) == "foo");
+	assert(serializeToJsonString(cast(const(wchar)[])"foo"w) == "\"foo\"");
+	assert(deserializeJson!wstring("\"foo\"") == "foo");
+
+	assert(serializeToJson(cast(const(dchar)[])"foo"d) == Json("foo"));
+	assert(serializeToJson("foo"d.dup) == Json("foo"));
+	assert(deserializeJson!dstring(Json("foo")) == "foo");
+	assert(deserializeJson!dstring(Json([Json("f"), Json("o"), Json("o")])) == "foo");
+	assert(serializeToJsonString(cast(const(dchar)[])"foo"d) == "\"foo\"");
+	assert(deserializeJson!dstring("\"foo\"") == "foo");
 }
